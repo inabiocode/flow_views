@@ -1,1 +1,89 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Visor de Flujo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 780px; margin: 2rem auto; padding: 1rem; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 1.2rem; box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+  .responsable { display: inline-block; background: #e3f2fd; color: #0d47a1; padding: .2rem .6rem; border-radius: 12px; font-size: .85rem; font-weight: 600; }
+  .nro { color: #666; font-size: .8rem; }
+  .desc { white-space: pre-wrap; margin: 1rem 0; }
+  .docs { font-size: .85rem; color: #555; }
+  .docs ul { margin: .3rem 0; padding-left: 1.2rem; }
+  .nav { margin-top: 1.2rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+  button { padding: .5rem 1rem; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 6px; cursor: pointer; }
+  button.secondary { background: #fff; color: #1976d2; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .crumbs { margin-top: 1.5rem; font-size: .8rem; color: #666; }
+  .crumbs a { color: #1976d2; cursor: pointer; text-decoration: underline; margin-right: .3rem; }
+  .empty { color: #999; font-style: italic; }
+</style>
+</head>
+<body>
+<h1 id="titulo">Visor de Flujo</h1>
+<div id="app"></div>
+<div class="crumbs" id="crumbs"></div>
+
+<script src="DT-GARG-001_datos.js"></script>
+<script>
+const F = window.FLUJO;
+const idx = Object.fromEntries(F.nodos.map(n => [n.id, n]));
+const out = {};
+F.conexiones.forEach(c => { (out[c.origen] ??= []).push(c); });
+
+const hist = [];
+let actual = F.inicios[0] || F.nodos[0]?.id;
+
+function render() {
+  const n = idx[actual];
+  const app = document.getElementById('app');
+  if (!n) { app.innerHTML = '<p class="empty">Nodo no encontrado.</p>'; return; }
+
+  const docs = (n.documentos || n.docs || '').split(/\n|,/).map(s => s.trim()).filter(s => s && s.toUpperCase() !== 'N/A');
+
+  let html = `<div class="card">
+    <div class="nro">${n.tipo.toUpperCase()} · ${n.id}</div>
+    <h2>${n.nombre || '(sin nombre)'}</h2>
+    ${n.responsable ? `<span class="responsable">👤 ${n.responsable}</span>` : ''}
+    <div class="desc">${n.descripcion || ''}</div>
+    ${docs.length ? `<div class="docs"><b>Documentos:</b><ul>${docs.map(d => `<li>${d}</li>`).join('')}</ul></div>` : ''}
+    <div class="nav" id="nav"></div>
+  </div>`;
+  app.innerHTML = html;
+
+  const nav = document.getElementById('nav');
+  const btnPrev = document.createElement('button');
+  btnPrev.className = 'secondary';
+  btnPrev.textContent = '◀ Anterior';
+  btnPrev.disabled = hist.length === 0;
+  btnPrev.onclick = () => { actual = hist.pop(); render(); };
+  nav.appendChild(btnPrev);
+
+  (out[actual] || []).forEach(c => {
+    const dst = idx[c.destino];
+    const btn = document.createElement('button');
+    btn.textContent = (c.condicion ? `[${c.condicion}] ` : '') + 'Siguiente ▶ ' + (dst?.nombre || c.destino);
+    btn.onclick = () => { hist.push(actual); actual = c.destino; render(); };
+    nav.appendChild(btn);
+  });
+
+  const crumbs = document.getElementById('crumbs');
+  crumbs.innerHTML = 'Recorrido: ' + hist.map((h, i) =>
+    `<a data-i="${i}">${idx[h]?.nombre || h}</a>`).join('→') +
+    (hist.length ? ' → <b>' + (n.nombre || n.id) + '</b>' : '');
+  crumbs.querySelectorAll('a').forEach(a => a.onclick = () => {
+    const i = +a.dataset.i;
+    const target = hist[i];
+    hist.length = i;
+    actual = target;
+    render();
+  });
+}
+
+document.getElementById('titulo').textContent = F.proceso || 'Visor de Flujo';
+render();
+</script>
+</body>
+</html>
